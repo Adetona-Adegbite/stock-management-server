@@ -6,7 +6,7 @@ const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-const port = 3000;
+const port = process.env.PORT || 3000;
 const app = express();
 
 app.use(cors());
@@ -360,6 +360,6 @@ app.delete("/clear-table/:tableId", async (req, res) => {
   }
 });
 
-app.listen(port || process.env.PORT, () => {
+app.listen(port, () => {
   console.log(`Server has started on port ${port}`);
 });
