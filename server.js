@@ -261,7 +261,8 @@ app.post("/add-to-waiter-tab", async (req, res) => {
         "SELECT waiterid FROM tables WHERE number = $1",
         [tableId]
       );
-      console.log(tableResult.rows);
+
+      console.log("waiterId: ", tableResult.rows);
       const waiterId = tableResult.rows[0].waiterid;
 
       await pool.query("BEGIN");
@@ -358,19 +359,16 @@ app.get("/orders/:tableId", async (req, res) => {
   }
 });
 
-// Delete orders and waiter data related to a table
-app.delete("/clear-table/:tableId", async (req, res) => {
+app.put("/clear-table/:tableId", async (req, res) => {
   const { tableId } = req.params;
   try {
-    await pool.query("BEGIN");
-    await pool.query("DELETE FROM orders WHERE tableId = $1", [tableId]);
-    await pool.query("DELETE FROM tables WHERE id = $1", [tableId]);
-    await pool.query("COMMIT");
-    res.status(200).send("Table data cleared successfully");
+    await pool.query("UPDATE tables SET cleared = TRUE WHERE number = $1", [
+      tableId,
+    ]);
+    res.status(200).send("Table cleared successfully");
   } catch (err) {
-    await pool.query("ROLLBACK");
     console.error(err);
-    res.status(500).send("Error clearing table data");
+    res.status(500).send("Error clearing table");
   }
 });
 
