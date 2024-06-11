@@ -174,11 +174,11 @@ app.delete("/delete-stock-item", async (req, res) => {
 
 // Edit stock item
 app.put("/edit-stock-item", async (req, res) => {
-  const { id, name, quantity, description } = req.body;
+  const { id, name, quantity, description, price } = req.body;
   try {
     await pool.query(
-      "UPDATE items SET name = $1, quantity = $2, description = $3 WHERE id = $4",
-      [name, quantity, description, id]
+      "UPDATE items SET name = $1, quantity = $2, description = $3 WHERE id = $4, price=$5",
+      [name, quantity, description, id, price]
     );
     res.status(200).send("Stock item updated successfully");
   } catch (err) {
@@ -196,6 +196,17 @@ app.post("/create-waiter", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).send("Error creating waiter");
+  }
+});
+
+app.delete("/delete-waiter/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query("DELETE FROM waiters WHERE id = $1", [id]);
+    res.status(200).send("Waiter deleted successfully");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error deleting waiter");
   }
 });
 
@@ -236,19 +247,21 @@ app.post("/create-waiter-tab", async (req, res) => {
 
 app.post("/add-to-waiter-tab", async (req, res) => {
   const { tableId, itemId, quantity } = req.body;
+  console.log(tableId);
   try {
     const itemResult = await pool.query(
       "SELECT quantity FROM items WHERE id = $1",
       [itemId]
     );
     const item = itemResult.rows[0];
+    console.log("items: ", item);
 
     if (item.quantity >= quantity) {
       const tableResult = await pool.query(
-        "SELECT waiterId FROM tables WHERE id = $1",
+        "SELECT waiterid FROM tables WHERE number = $1",
         [tableId]
       );
-
+      console.log(tableResult.rows);
       const waiterId = tableResult.rows[0].waiterid;
 
       await pool.query("BEGIN");
@@ -306,11 +319,12 @@ app.get("/orders", async (req, res) => {
              w.name as waiterName, 
              i.name as itemName 
       FROM orders o 
-      JOIN tables t ON o.tableId = t.id 
-      JOIN waiters w ON o.waiterId = w.id 
-      JOIN items i ON o.itemId = i.id
+      JOIN tables t ON o.tableid = t.number 
+      JOIN waiters w ON o.waiterid = w.id 
+      JOIN items i ON o.itemid = i.id
       ORDER BY o.orderTime DESC
     `);
+    console.log(result.rows);
     res.status(200).json(result.rows);
   } catch (err) {
     console.error(err);
