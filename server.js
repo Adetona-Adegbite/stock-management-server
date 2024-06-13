@@ -244,6 +244,47 @@ app.post("/create-waiter-tab", async (req, res) => {
     res.status(500).send("Error creating table");
   }
 });
+// backend/routes.js or wherever you define your routes
+
+// Add items to table
+app.post("/add-to-table", async (req, res) => {
+  const { tableId, itemId, quantity } = req.body;
+
+  try {
+    // Step 1: Fetch current item quantity from stock
+    const fetchItemQuery = "SELECT quantity FROM items WHERE id = $1";
+    const fetchItemResult = await pool.query(fetchItemQuery, [itemId]);
+    const currentQuantity = fetchItemResult.rows[0].quantity;
+
+    // Step 2: Insert into tableItems
+    const insertQuery =
+      "INSERT INTO tableitems (tableId, itemId, quantity) VALUES ($1, $2, $3)";
+    await pool.query(insertQuery, [tableId, itemId, quantity]);
+
+    // Step 3: Update stock quantity
+    const updatedQuantity = currentQuantity - quantity;
+    const updateStockQuery = "UPDATE items SET quantity = $1 WHERE id = $2";
+    await pool.query(updateStockQuery, [updatedQuantity, itemId]);
+
+    res.status(200).send("Item added to table");
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+// Get items for a table
+app.get("/table-items/:tableId", async (req, res) => {
+  const { tableId } = req.params;
+  try {
+    const items = await pool.query(
+      "SELECT ti.id, i.name as itemName, ti.quantity FROM tableItems ti JOIN items i ON ti.itemId = i.id WHERE ti.tableId = $1",
+      [tableId]
+    );
+    res.status(200).json(items.rows);
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
 
 app.post("/add-to-waiter-tab", async (req, res) => {
   const { tableId, itemId, quantity } = req.body;
@@ -356,6 +397,44 @@ app.get("/orders/:tableId", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).send("Error fetching orders by table");
+  }
+});
+
+app.delete("/delete-order/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Step 1: Fetch item ID and quantity from the deleted order
+    const fetchOrderQuery =
+      "SELECT itemId, quantity FROM tableitems WHERE id = $1";
+    const fetchOrderResult = await pool.query(fetchOrderQuery, [id]);
+
+    if (fetchOrderResult.rows.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    const { itemId, quantity } = fetchOrderResult.rows[0];
+
+    // Step 2: Delete the order from tableItems
+    const deleteOrderQuery = "DELETE FROM tableitems WHERE id = $1 RETURNING *";
+    const deleteOrderResult = await pool.query(deleteOrderQuery, [id]);
+
+    if (deleteOrderResult.rowCount === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    // Step 3: Update stock quantity
+    const updateStockQuery =
+      "UPDATE items SET quantity = quantity + $1 WHERE id = $2";
+    await pool.query(updateStockQuery, [quantity, itemId]);
+
+    res.status(200).json({
+      message: "Order deleted successfully",
+      order: deleteOrderResult.rows[0],
+    });
+  } catch (error) {
+    console.error("Error deleting order:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
