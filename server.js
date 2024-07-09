@@ -121,7 +121,7 @@ app.post("/login", async (req, res) => {
       const accessToken = jwt.sign(
         { username: user.username },
         process.env.JWT_SECRET,
-        { expiresIn: "1h" }
+        { expiresIn: "10h" }
       );
       console.log(accessToken);
       res.json({ accessToken });
@@ -177,7 +177,7 @@ app.put("/edit-stock-item", async (req, res) => {
   const { id, name, quantity, description, price } = req.body;
   try {
     await pool.query(
-      "UPDATE items SET name = $1, quantity = $2, description = $3 WHERE id = $4, price=$5",
+      "UPDATE items SET name = $1, quantity = $2, description = $3, price=$5 WHERE id = $4 ",
       [name, quantity, description, id, price]
     );
     res.status(200).send("Stock item updated successfully");
@@ -256,17 +256,20 @@ app.post("/add-to-table", async (req, res) => {
     const fetchItemResult = await pool.query(fetchItemQuery, [itemId]);
     const currentQuantity = fetchItemResult.rows[0].quantity;
 
-    // Step 2: Insert into tableItems
-    const insertQuery =
-      "INSERT INTO tableitems (tableId, itemId, quantity) VALUES ($1, $2, $3)";
-    await pool.query(insertQuery, [tableId, itemId, quantity]);
+    if (currentQuantity >= quantity) {
+      const insertQuery =
+        "INSERT INTO tableitems (tableId, itemId, quantity) VALUES ($1, $2, $3)";
+      await pool.query(insertQuery, [tableId, itemId, quantity]);
 
-    // Step 3: Update stock quantity
-    const updatedQuantity = currentQuantity - quantity;
-    const updateStockQuery = "UPDATE items SET quantity = $1 WHERE id = $2";
-    await pool.query(updateStockQuery, [updatedQuantity, itemId]);
+      // Step 3: Update stock quantity
+      const updatedQuantity = currentQuantity - quantity;
+      const updateStockQuery = "UPDATE items SET quantity = $1 WHERE id = $2";
+      await pool.query(updateStockQuery, [updatedQuantity, itemId]);
 
-    res.status(200).send("Item added to table");
+      res.status(200).send("Item added to table");
+    } else {
+      res.status(500).send("Innadequate Quantity");
+    }
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -299,18 +302,19 @@ app.post("/add-to-waiter-tab", async (req, res) => {
 
     if (item.quantity >= quantity) {
       const tableResult = await pool.query(
-        "SELECT waiterid FROM tables WHERE number = $1",
+        "SELECT waiterid FROM tables WHERE id = $1",
         [tableId]
       );
-
+      console.log("Table Id: ", tableId);
       console.log("waiterId: ", tableResult.rows);
       const waiterId = tableResult.rows[0].waiterid;
 
       await pool.query("BEGIN");
 
       await pool.query(
-        "INSERT INTO table_items (tableId, itemId, quantity) VALUES ($1, $2, $3) " +
-          "ON CONFLICT (tableId, itemId) DO UPDATE SET quantity = table_items.quantity + $3",
+        "INSERT INTO tableitems (tableId, itemId, quantity) VALUES ($1, $2, $3) ",
+        // +
+        // "ON CONFLICT (tableId, itemId) DO UPDATE SET quantity = tableitems.quantity + $3",
         [tableId, itemId, quantity]
       );
 
@@ -342,7 +346,7 @@ app.post("/add-to-waiter-tab", async (req, res) => {
 app.get("/tables", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM tables t,waiters w where t.waiterId = w.id"
+      "SELECT t.id, t.number,t.waiterid,t.cleared FROM tables t,waiters w where t.waiterid = w.id"
     );
     res.status(200).json(result.rows);
     console.log(result.rows);
@@ -361,7 +365,7 @@ app.get("/orders", async (req, res) => {
              w.name as waiterName, 
              i.name as itemName 
       FROM orders o 
-      JOIN tables t ON o.tableid = t.number 
+      JOIN tables t ON o.tableid = t.id 
       JOIN waiters w ON o.waiterid = w.id 
       JOIN items i ON o.itemid = i.id
       ORDER BY o.orderTime DESC
@@ -441,7 +445,7 @@ app.delete("/delete-order/:id", async (req, res) => {
 app.put("/clear-table/:tableId", async (req, res) => {
   const { tableId } = req.params;
   try {
-    await pool.query("UPDATE tables SET cleared = TRUE WHERE number = $1", [
+    await pool.query("UPDATE tables SET cleared = TRUE WHERE id = $1", [
       tableId,
     ]);
     res.status(200).send("Table cleared successfully");
