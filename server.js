@@ -346,7 +346,7 @@ app.post("/add-to-waiter-tab", async (req, res) => {
 app.get("/tables", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT t.id, t.number,t.waiterid,t.cleared FROM tables t,waiters w where t.waiterid = w.id"
+      "SELECT t.id, t.number,t.waiterid,w.name,t.cleared FROM tables t,waiters w where t.waiterid = w.id"
     );
     res.status(200).json(result.rows);
     console.log(result.rows);
@@ -416,9 +416,8 @@ app.delete("/delete-order/:id", async (req, res) => {
     if (fetchOrderResult.rows.length === 0) {
       return res.status(404).json({ error: "Order not found" });
     }
-
-    const { itemId, quantity } = fetchOrderResult.rows[0];
-
+    const { itemid, quantity } = fetchOrderResult.rows[0];
+    console.log(itemid, quantity);
     // Step 2: Delete the order from tableItems
     const deleteOrderQuery = "DELETE FROM tableitems WHERE id = $1 RETURNING *";
     const deleteOrderResult = await pool.query(deleteOrderQuery, [id]);
@@ -430,7 +429,7 @@ app.delete("/delete-order/:id", async (req, res) => {
     // Step 3: Update stock quantity
     const updateStockQuery =
       "UPDATE items SET quantity = quantity + $1 WHERE id = $2";
-    await pool.query(updateStockQuery, [quantity, itemId]);
+    await pool.query(updateStockQuery, [quantity, itemid]);
 
     res.status(200).json({
       message: "Order deleted successfully",
